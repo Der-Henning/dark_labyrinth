@@ -10,7 +10,7 @@ use game::{Game, GameSettings};
 use geometrie::{Line, Point};
 use menu::{Menus, make_skin};
 
-const WINDOW_DIMENSIONS: (usize, usize) = (1000, 1500);
+const WINDOW_DIMENSIONS: (usize, usize) = (800, 1200);
 const GRID_SIZES: [usize; 3] = [100, 50, 25];
 const SEED: Option<u64> = None;
 const RAYS: usize = 360;
@@ -25,6 +25,7 @@ fn window_conf() -> Conf {
     Conf {
         window_title: "Dark Labyrinth".to_owned(),
         fullscreen: false,
+        high_dpi: true,
         window_height: WINDOW_DIMENSIONS.0 as i32,
         window_width: WINDOW_DIMENSIONS.1 as i32,
         window_resizable: false,
