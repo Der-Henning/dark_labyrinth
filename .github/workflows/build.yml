@@ -1,0 +1,86 @@
+name: Build & Deploy (Macroquad WASM → GitHub Pages)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # If your repo is a single-crate project, this auto-detects the crate name from Cargo.toml.
+      # If it fails (e.g., workspaces), replace with: CRATE_NAME: your_crate_name
+      CRATE_NAME: dark_labyrinth_rs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable + wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build release (wasm)
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli
+
+      - name: Generate JS bindings (target web)
+        run: |
+          mkdir -p dist
+          wasm-bindgen \
+            --target web \
+            --no-typescript \
+            --out-dir dist \
+            target/wasm32-unknown-unknown/release/${CRATE_NAME}.wasm
+
+      - name: Create minimal index.html
+        run: |
+          cat > dist/index.html << 'HTML'
+          <!doctype html>
+          <html lang="en">
+          <meta charset="utf-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1"/>
+          <title>Macroquad WASM</title>
+          <style>html,body{margin:0;height:100%;overflow:hidden}</style>
+          <body>
+            <script type="module">
+              import init from './${CRATE_NAME}.js';
+              init();
+            </script>
+          </body>
+          </html>
+          HTML
+
+      - name: Copy static assets (optional)
+        run: |
+          if [ -d static ]; then rsync -av --delete static/ dist/; fi
+          if [ -d assets ]; then mkdir -p dist/assets && rsync -av --delete assets/ dist/assets/; fi
+        # Put your textures/sounds/etc in /assets or /static at repo root. Macroquad will fetch by relative path.
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
