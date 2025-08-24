@@ -1,4 +1,4 @@
-name: Build & Deploy (Macroquad to GitHub Pages)
+name: Build & Deploy Macroquad (WASM → GitHub Pages)
 
 on:
   push:
@@ -18,55 +18,45 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust (stable) + wasm target
+      - name: Install Rust + wasm target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build release (wasm)
+      - name: Build (release, wasm32)
         run: cargo build --release --target wasm32-unknown-unknown
 
-      - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli
-
-      - name: Generate JS bindings (no-modules)
+      - name: Prepare site (index.html + assets)
         run: |
+          set -eux
           mkdir -p dist
-          wasm-bindgen \
-            --target no-modules \
-            --no-typescript \
-            --out-dir dist \
-            target/wasm32-unknown-unknown/release/dark_labyrinth_rs.wasm
-
-      - name: Create index.html
-        run: |
+          cp target/wasm32-unknown-unknown/release/dark_labyrinth_rs.wasm dist/
+          # Minimal macroquad HTML shell using the official loader:
           cat > dist/index.html << 'HTML'
           <!doctype html>
           <html lang="en">
           <meta charset="utf-8"/>
           <meta name="viewport" content="width=device-width, initial-scale=1"/>
           <title>Macroquad WASM</title>
-          <style>html,body{margin:0;height:100%;overflow:hidden;background:#000}</style>
+          <style>html,body,canvas{margin:0;height:100%;width:100%;overflow:hidden;background:#000}</style>
           <body>
-            <script src="./dark_labyrinth_rs.js"></script>
+            <canvas id="glcanvas" tabindex="1"></canvas>
+            <!-- Macroquad's loader that sets up all WASM imports -->
+            <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
             <script>
-              // Load & start the WASM. Macroquad will create the canvas itself.
-              wasm_bindgen("./dark_labyrinth_rs_bg.wasm").catch(console.error);
+              // The .wasm file sits next to this HTML:
+              load("./dark_labyrinth_rs.wasm");
             </script>
           </body>
           </html>
           HTML
-
-      - name: Copy static assets (optional)
-        run: |
+          # Optional: include your static files
+          if [ -d assets ]; then rsync -av --delete assets/ dist/assets/; fi
           if [ -d static ]; then rsync -av --delete static/ dist/; fi
-          if [ -d assets ]; then mkdir -p dist/assets && rsync -av --delete assets/ dist/assets/; fi
-
-      - name: Disable Jekyll on Pages (serve .wasm correctly)
-        run: touch dist/.nojekyll
+          # Keep GitHub Pages from touching files
+          touch dist/.nojekyll
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -80,6 +70,5 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
