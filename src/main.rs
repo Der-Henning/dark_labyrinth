@@ -1,10 +1,6 @@
 use macroquad::prelude::*;
 use macroquad::ui::root_ui;
 use std::collections::VecDeque;
-use std::time::Instant;
-
-#[allow(unused_imports)]
-use web_sys::*;
 
 mod game;
 mod geometrie;
@@ -14,7 +10,7 @@ use game::{Game, GameSettings};
 use geometrie::{Line, Point};
 use menu::{Menus, make_skin};
 
-const WINDOW_DIMENSIONS: (usize, usize) = (900, 1000);
+const WINDOW_DIMENSIONS: (usize, usize) = (1000, 1500);
 const GRID_SIZES: [usize; 3] = [100, 50, 25];
 const SEED: Option<u64> = None;
 const RAYS: usize = 360;
@@ -62,13 +58,13 @@ async fn main() {
 
     let mut game_state = GameState::MainMenu;
 
-    let mut frame_durations = Fps::new();
+    let mut frame_durations = DeltaTime::new();
 
     let mut display_new_game_menu = true;
     let mut display_options_menu = false;
 
     loop {
-        let calculation_time = Instant::now();
+        let calculation_time = macroquad::miniquad::date::now();
         clear_background(BLACK);
 
         match game_state {
@@ -145,12 +141,12 @@ async fn main() {
             }
         }
 
-        frame_durations.push(calculation_time.elapsed().as_secs_f32());
-        if game.settings.draw_fps {
+        frame_durations.push(macroquad::miniquad::date::now() - calculation_time);
+        if game.settings.draw_delta_time {
             // draw_fps();
-            let fps = frame_durations.fps().unwrap_or(0);
+            let delta_time = frame_durations.delta_time().unwrap_or(0.0) * 1000.0;
             draw_text(
-                format!("{} FPS", fps).as_str(),
+                format!("dt {:.3}ms", delta_time).as_str(),
                 5.0,
                 FONT_SIZE as f32 / 2.0,
                 FONT_SIZE as f32 / 2.0,
@@ -205,22 +201,22 @@ fn draw_time(game: &Game) {
     );
 }
 
-struct Fps(VecDeque<f32>);
+struct DeltaTime(VecDeque<f64>);
 
-impl Fps {
+impl DeltaTime {
     fn new() -> Self {
         Self(VecDeque::with_capacity(120))
     }
-    fn push(&mut self, time: f32) {
+    fn push(&mut self, time: f64) {
         while self.0.len() >= 120 {
             self.0.pop_front();
         }
         self.0.push_back(time);
     }
-    fn fps(&self) -> Option<usize> {
+    fn delta_time(&self) -> Option<f64> {
         match self.0.len() {
             0 => None,
-            _ => Some((self.0.len() as f32 / self.0.iter().sum::<f32>()) as usize),
+            _ => Some(self.0.iter().sum::<f64>() / self.0.len() as f64),
         }
     }
 }

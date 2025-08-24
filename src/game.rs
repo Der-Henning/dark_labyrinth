@@ -2,7 +2,6 @@ use itertools::Itertools;
 use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
 
 use crate::{
     DROPOUT, GRID_SIZES, Line, Point, RAY_LENGTH, RAYS, TARGET_THRESHOLD, WINDOW_DIMENSIONS,
@@ -11,15 +10,15 @@ use crate::{
 #[derive(Clone)]
 pub struct GameSettings {
     pub draw_labyrinth: bool,
-    pub draw_fps: bool,
+    pub draw_delta_time: bool,
     pub labyrinth_size: usize,
 }
 
 impl GameSettings {
-    pub fn new(draw_labyrinth: bool, draw_fps: bool, labyrinth_size: usize) -> Self {
+    pub fn new(draw_labyrinth: bool, draw_delta_time: bool, labyrinth_size: usize) -> Self {
         Self {
             draw_labyrinth,
-            draw_fps,
+            draw_delta_time,
             labyrinth_size,
         }
     }
@@ -246,10 +245,10 @@ enum GameTimerState {
 }
 
 pub struct GameTimer {
-    times: Vec<Duration>,
-    instant: Option<Instant>,
+    times: Vec<f64>,
+    instant: Option<f64>,
     state: GameTimerState,
-    pub result: Option<Duration>,
+    pub result: Option<f64>,
 }
 
 impl GameTimer {
@@ -266,27 +265,28 @@ impl GameTimer {
         match self.state {
             GameTimerState::Idle => {
                 self.times = Vec::new();
-                self.instant = Some(Instant::now());
+                self.instant = Some(macroquad::miniquad::date::now());
                 self.state = GameTimerState::Running;
             }
             _ => panic!("Can only start game timer in idle mode!"),
         }
     }
 
-    pub fn current(&self) -> Duration {
+    pub fn current(&self) -> f64 {
         match self.state {
             GameTimerState::Running => match self.instant {
-                Some(i) => self.times.iter().sum::<Duration>() + i.elapsed(),
-                _ => self.times.iter().sum::<Duration>(),
+                Some(i) => self.times.iter().sum::<f64>() + macroquad::miniquad::date::now() - i,
+                _ => self.times.iter().sum::<f64>(),
             },
-            _ => self.times.iter().sum::<Duration>(),
+            _ => self.times.iter().sum::<f64>(),
         }
     }
 
     pub fn stop(&mut self) {
         match self.state {
             GameTimerState::Running => {
-                self.times.push(self.instant.unwrap().elapsed());
+                self.times
+                    .push(macroquad::miniquad::date::now() - self.instant.unwrap());
                 self.result = Some(self.times.iter().sum());
                 self.state = GameTimerState::Idle;
             }
@@ -301,7 +301,8 @@ impl GameTimer {
     pub fn pause(&mut self) {
         match self.state {
             GameTimerState::Running => {
-                self.times.push(self.instant.unwrap().elapsed());
+                self.times
+                    .push(macroquad::miniquad::date::now() - self.instant.unwrap());
                 self.state = GameTimerState::Paused;
             }
             _ => panic!("Can only pause game timer in running state!"),
@@ -311,7 +312,7 @@ impl GameTimer {
     pub fn resume(&mut self) {
         match self.state {
             GameTimerState::Paused => {
-                self.instant = Some(Instant::now());
+                self.instant = Some(macroquad::miniquad::date::now());
                 self.state = GameTimerState::Running;
             }
             _ => panic!("Can only resume game timer in paused mode!"),

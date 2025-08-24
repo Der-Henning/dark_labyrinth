@@ -71,8 +71,8 @@ impl Menus {
 
                         Checkbox::new(hash!())
                             .pos(vec2(-110., 50.0))
-                            .label("Display FPS")
-                            .ui(ui, &mut game_settings.draw_fps);
+                            .label("Display dt")
+                            .ui(ui, &mut game_settings.draw_delta_time);
 
                         if ui.button(vec2(65., 175.), "Back") {
                             *display_options_menu = false;
