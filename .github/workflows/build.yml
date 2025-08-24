@@ -1,4 +1,4 @@
-name: Build & Deploy (Macroquad WASM → GitHub Pages)
+name: Build & Deploy (Macroquad to GitHub Pages)
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain (stable + wasm target)
+      - name: Install Rust (stable) + wasm target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -32,16 +32,16 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
 
-      - name: Generate JS bindings (target web)
+      - name: Generate JS bindings (no-modules)
         run: |
           mkdir -p dist
           wasm-bindgen \
-            --target web \
+            --target no-modules \
             --no-typescript \
             --out-dir dist \
             target/wasm32-unknown-unknown/release/dark_labyrinth_rs.wasm
 
-      - name: Create minimal index.html
+      - name: Create index.html
         run: |
           cat > dist/index.html << 'HTML'
           <!doctype html>
@@ -49,11 +49,12 @@ jobs:
           <meta charset="utf-8"/>
           <meta name="viewport" content="width=device-width, initial-scale=1"/>
           <title>Macroquad WASM</title>
-          <style>html,body{margin:0;height:100%;overflow:hidden}</style>
+          <style>html,body{margin:0;height:100%;overflow:hidden;background:#000}</style>
           <body>
-            <script type="module">
-              import init from './dark_labyrinth_rs.js';
-              init();
+            <script src="./dark_labyrinth_rs.js"></script>
+            <script>
+              // Load & start the WASM. Macroquad will create the canvas itself.
+              wasm_bindgen("./dark_labyrinth_rs_bg.wasm").catch(console.error);
             </script>
           </body>
           </html>
@@ -63,7 +64,9 @@ jobs:
         run: |
           if [ -d static ]; then rsync -av --delete static/ dist/; fi
           if [ -d assets ]; then mkdir -p dist/assets && rsync -av --delete assets/ dist/assets/; fi
-        # Put your textures/sounds/etc in /assets or /static at repo root. Macroquad will fetch by relative path.
+
+      - name: Disable Jekyll on Pages (serve .wasm correctly)
+        run: touch dist/.nojekyll
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
