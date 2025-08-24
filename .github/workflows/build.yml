@@ -17,10 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # If your repo is a single-crate project, this auto-detects the crate name from Cargo.toml.
-      # If it fails (e.g., workspaces), replace with: CRATE_NAME: your_crate_name
-      CRATE_NAME: dark_labyrinth_rs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +39,7 @@ jobs:
             --target web \
             --no-typescript \
             --out-dir dist \
-            target/wasm32-unknown-unknown/release/${CRATE_NAME}.wasm
+            target/wasm32-unknown-unknown/release/dark_labyrinth_rs.wasm
 
       - name: Create minimal index.html
         run: |
@@ -56,7 +52,7 @@ jobs:
           <style>html,body{margin:0;height:100%;overflow:hidden}</style>
           <body>
             <script type="module">
-              import init from './${CRATE_NAME}.js';
+              import init from './dark_labyrinth_rs.js';
               init();
             </script>
           </body>
