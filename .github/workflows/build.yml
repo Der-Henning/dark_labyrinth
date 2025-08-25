@@ -34,7 +34,7 @@ jobs:
           mkdir -p dist
           cp target/wasm32-unknown-unknown/release/dark_labyrinth_rs.wasm dist/
           cp index.html dist/
-          rsync -av --delete assets/ dist/assets/; fi
+          rsync -av --delete assets/ dist/assets/
           # Keep GitHub Pages from touching files
           touch dist/.nojekyll
 
