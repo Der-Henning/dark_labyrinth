@@ -33,28 +33,8 @@ jobs:
           set -eux
           mkdir -p dist
           cp target/wasm32-unknown-unknown/release/dark_labyrinth_rs.wasm dist/
-          # Minimal macroquad HTML shell using the official loader:
-          cat > dist/index.html << 'HTML'
-          <!doctype html>
-          <html lang="en">
-          <meta charset="utf-8"/>
-          <meta name="viewport" content="width=device-width, initial-scale=1"/>
-          <title>Macroquad WASM</title>
-          <style>html,body,canvas{margin:0;height:100%;width:100%;overflow:hidden;background:#000}</style>
-          <body>
-            <canvas id="glcanvas" tabindex="1"></canvas>
-            <!-- Macroquad's loader that sets up all WASM imports -->
-            <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
-            <script>
-              // The .wasm file sits next to this HTML:
-              load("./dark_labyrinth_rs.wasm");
-            </script>
-          </body>
-          </html>
-          HTML
-          # Optional: include your static files
-          if [ -d assets ]; then rsync -av --delete assets/ dist/assets/; fi
-          if [ -d static ]; then rsync -av --delete static/ dist/; fi
+          cp index.html dist/
+          rsync -av --delete assets/ dist/assets/; fi
           # Keep GitHub Pages from touching files
           touch dist/.nojekyll
 

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Dark Labyrinth</title>
+    <style>
+        html,
+        body,
+        canvas {
+            margin: 0px;
+            padding: 0px;
+            width: 1200px;
+            height: 800px;
+            overflow: hidden;
+            background: black;
+            z-index: 0;
+            margin-left: auto;
+            margin-right: auto;
+            border-color: blue;
+            border-width: 1px;
+            border-style: solid;
+        }
+    </style>
+    </style>
+    <body>
+        <canvas id="glcanvas" tabindex="1"></canvas>
+        <script src="https://not-fl3.github.io/miniquad-samples/mq_js_bundle.js"></script>
+        <script>load("./dark_labyrinth_rs.wasm");</script>
+    </body>
+</html>
