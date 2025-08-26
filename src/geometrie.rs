@@ -1,4 +1,4 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div, Mul, MulAssign, Sub};
 
 #[derive(Hash, PartialEq, PartialOrd, Copy, Clone, Debug)]
 pub struct Point<T> {
@@ -66,7 +66,6 @@ impl<T: std::cmp::PartialEq> Line<T> {
     }
 }
 
-// Implement Add for Point<T> where T supports Add
 impl<T> Add for Point<T>
 where
     T: Add<Output = T>,
@@ -81,7 +80,6 @@ where
     }
 }
 
-// Implement Sub for Point<T> where T supports Sub
 impl<T> Sub for Point<T>
 where
     T: Sub<Output = T>,
@@ -96,7 +94,6 @@ where
     }
 }
 
-// Implement Point<T> * T
 impl<T> Mul<T> for Point<T>
 where
     T: Mul<Output = T> + Copy,
@@ -108,6 +105,16 @@ where
             x: self.x * rhs,
             y: self.y * rhs,
         }
+    }
+}
+
+impl<T> MulAssign<T> for Point<T>
+where
+    T: MulAssign + Copy,
+{
+    fn mul_assign(&mut self, rhs: T) {
+        self.x *= rhs;
+        self.y *= rhs;
     }
 }
 
@@ -136,6 +143,16 @@ where
             a: self.a * rhs,
             b: self.b * rhs,
         }
+    }
+}
+
+impl<T> MulAssign<T> for Line<T>
+where
+    T: MulAssign + Copy,
+{
+    fn mul_assign(&mut self, rhs: T) {
+        self.a *= rhs;
+        self.b *= rhs;
     }
 }
 

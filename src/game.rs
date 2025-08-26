@@ -3,48 +3,29 @@ use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
-use crate::{
-    DROPOUT, GRID_SIZES, Line, Point, RAY_LENGTH, RAYS, TARGET_THRESHOLD, WINDOW_DIMENSIONS,
-};
-
-#[derive(Clone)]
-pub struct GameSettings {
-    pub draw_labyrinth: bool,
-    pub draw_delta_time: bool,
-    pub labyrinth_size: usize,
-}
-
-impl GameSettings {
-    pub fn new(draw_labyrinth: bool, draw_delta_time: bool, labyrinth_size: usize) -> Self {
-        Self {
-            draw_labyrinth,
-            draw_delta_time,
-            labyrinth_size,
-        }
-    }
-}
+use crate::geometrie::{Line, Point};
+use crate::{RAY_LENGTH, RAYS, WINDOW_DIMENSIONS};
 
 pub struct Game {
     pub position: Point<f32>,
     pub target: Point<f32>,
     pub timer: GameTimer,
-    pub settings: GameSettings,
     pub walls: Vec<Line<f32>>,
     pub grid_size: usize,
     base_rays: Vec<Point<f32>>,
+    threshold: f32,
 }
 
 impl Game {
-    pub fn new(settings: GameSettings) -> Self {
-        let grid_size = GRID_SIZES[settings.labyrinth_size];
+    pub fn new(grid_size: usize, dropout: f32, target_threshold: usize) -> Self {
         Self {
             position: get_random_point(grid_size),
             target: get_random_point(grid_size),
             timer: GameTimer::new(),
-            settings,
-            walls: make_walls(grid_size),
+            walls: make_walls(grid_size, dropout),
             grid_size,
-            base_rays: get_ray_directions(),
+            base_rays: get_ray_directions(RAYS, (grid_size * RAY_LENGTH) as f32),
+            threshold: (grid_size / target_threshold) as f32,
         }
     }
 
@@ -66,36 +47,34 @@ impl Game {
         self.base_rays
             .par_iter()
             .map(|&r| {
-                let p2 = self.position + r * (self.grid_size * RAY_LENGTH) as f32;
+                let p2 = self.position + r;
                 match get_next_wall_intersection(&self.position, &p2, &self.walls) {
                     Some((_wall, p)) => p,
                     _ => p2,
                 }
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 
     pub fn found_target(&self) -> bool {
-        self.position.distance(&self.target)
-            < (GRID_SIZES[self.settings.labyrinth_size] / TARGET_THRESHOLD) as f32
+        self.position.distance(&self.target) < self.threshold
     }
 }
 
 fn get_random_point(grid_size: usize) -> Point<f32> {
-    Point::new(
-        ((rand::rand() as usize % (WINDOW_DIMENSIONS.1 / grid_size) * grid_size) + grid_size / 2)
-            as f32,
-        ((rand::rand() as usize % (WINDOW_DIMENSIONS.0 / grid_size) * grid_size) + grid_size / 2)
-            as f32,
-    )
+    let p = (Vec2::new(rand::rand() as f32, rand::rand() as f32)
+        % (WINDOW_DIMENSIONS / grid_size as f32)
+        + 0.5)
+        * grid_size as f32;
+    Point::new(p.x, p.y)
 }
 
-fn make_walls(grid_size: usize) -> Vec<Line<f32>> {
-    let labyrinth = compress_labyrinth(make_labyrinth(grid_size));
+fn make_walls(grid_size: usize, dropout: f32) -> Vec<Line<f32>> {
+    let labyrinth = compress_labyrinth(make_labyrinth(grid_size, dropout));
     labyrinth
         .into_iter()
         .map(|line| Line::<f32>::from(line * grid_size))
-        .collect::<Vec<_>>()
+        .collect()
 }
 
 pub fn get_next_wall_intersection(
@@ -131,15 +110,15 @@ pub fn get_next_wall_intersection(
         .map(|(&wall, x, y, _d)| (wall, Point::new(x, y)))
 }
 
-fn make_labyrinth(grid_size: usize) -> Vec<Line<usize>> {
+fn make_labyrinth(grid_size: usize, dropout: f32) -> Vec<Line<usize>> {
     type Area = HashSet<Point<usize>>;
     type Edge = (usize, Option<usize>);
 
     let mut areas: HashMap<usize, Area> = HashMap::new();
     let mut edges: HashMap<Line<usize>, Edge> = HashMap::new();
 
-    (0..WINDOW_DIMENSIONS.1 / grid_size)
-        .cartesian_product(0..WINDOW_DIMENSIONS.0 / grid_size)
+    (0..WINDOW_DIMENSIONS.x as usize / grid_size)
+        .cartesian_product(0..WINDOW_DIMENSIONS.y as usize / grid_size)
         .map(|(x, y)| Point::new(x, y))
         .enumerate()
         .for_each(|(area_id, cell)| {
@@ -201,7 +180,7 @@ fn make_labyrinth(grid_size: usize) -> Vec<Line<usize>> {
         .filter_map(|(k, v)| v.1.map(|_v| *k))
         .collect::<Vec<_>>();
 
-    (0..(inner_edges.len() as f32 * DROPOUT) as usize).for_each(|_| {
+    (0..(inner_edges.len() as f32 * dropout) as usize).for_each(|_| {
         let rng_edge_idx = rand::rand() as usize % inner_edges.len();
         let edge_id = inner_edges.swap_remove(rng_edge_idx);
         edges.remove(&edge_id);
@@ -230,12 +209,12 @@ fn compress_labyrinth(mut labyrinth: Vec<Line<usize>>) -> Vec<Line<usize>> {
     zipped_labyrinth
 }
 
-fn get_ray_directions() -> Vec<Point<f32>> {
+fn get_ray_directions(rays: usize, length: f32) -> Vec<Point<f32>> {
     (0..360)
-        .step_by(360 / RAYS)
+        .step_by(360 / rays)
         .map(|r| r as f32 / 360.0 * 2.0 * std::f32::consts::PI)
-        .map(|r| Point::new(r.sin(), r.cos()))
-        .collect::<Vec<_>>()
+        .map(|r| Point::new(r.sin(), r.cos()) * length)
+        .collect()
 }
 
 enum GameTimerState {
@@ -276,9 +255,9 @@ impl GameTimer {
         match self.state {
             GameTimerState::Running => match self.instant {
                 Some(i) => self.times.iter().sum::<f64>() + macroquad::miniquad::date::now() - i,
-                _ => self.times.iter().sum::<f64>(),
+                _ => self.times.iter().sum(),
             },
-            _ => self.times.iter().sum::<f64>(),
+            _ => self.times.iter().sum(),
         }
     }
 

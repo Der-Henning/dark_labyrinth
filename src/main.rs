@@ -6,11 +6,13 @@ mod game;
 mod geometrie;
 mod menu;
 
-use game::{Game, GameSettings};
-use geometrie::{Line, Point};
+use game::Game;
 use menu::{Menus, make_skin};
 
-const WINDOW_DIMENSIONS: (usize, usize) = (800, 1200);
+const WINDOW_DIMENSIONS: Vec2 = Vec2 {
+    x: 1200f32,
+    y: 800f32,
+};
 const GRID_SIZES: [usize; 3] = [100, 50, 25];
 const SEED: Option<u64> = None;
 const RAYS: usize = 360;
@@ -26,14 +28,40 @@ fn window_conf() -> Conf {
         window_title: "Dark Labyrinth".to_owned(),
         fullscreen: false,
         high_dpi: true,
-        window_height: WINDOW_DIMENSIONS.0 as i32,
-        window_width: WINDOW_DIMENSIONS.1 as i32,
+        window_height: WINDOW_DIMENSIONS.y as i32,
+        window_width: WINDOW_DIMENSIONS.x as i32,
         window_resizable: false,
         platform: miniquad::conf::Platform {
             linux_backend: miniquad::conf::LinuxBackend::WaylandOnly,
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+pub struct Settings {
+    pub draw_labyrinth: bool,
+    pub draw_delta_time: bool,
+    pub labyrinth_size: usize,
+    pub dropout: f32,
+    pub target_threshold: usize,
+}
+
+impl Settings {
+    pub fn new(
+        draw_labyrinth: bool,
+        draw_delta_time: bool,
+        labyrinth_size: usize,
+        dropout: f32,
+        target_threshold: usize,
+    ) -> Self {
+        Self {
+            draw_labyrinth,
+            draw_delta_time,
+            labyrinth_size,
+            dropout,
+            target_threshold,
+        }
     }
 }
 
@@ -49,14 +77,18 @@ async fn main() {
     let skin = make_skin().await;
     root_ui().push_skin(&skin);
 
-    match SEED {
-        Some(seed) => rand::srand(seed),
-        _ => rand::srand(macroquad::miniquad::date::now() as u64),
-    }
+    let seed = match SEED {
+        Some(s) => s,
+        _ => macroquad::miniquad::date::now() as u64,
+    };
+    rand::srand(seed);
 
-    let mut game_settings = GameSettings::new(false, false, 1);
-    let mut game = Game::new(game_settings.clone());
-
+    let mut settings = Settings::new(false, false, 1, DROPOUT, TARGET_THRESHOLD);
+    let mut game = Game::new(
+        GRID_SIZES[settings.labyrinth_size],
+        settings.dropout,
+        settings.target_threshold,
+    );
     let mut game_state = GameState::MainMenu;
 
     let mut frame_durations = DeltaTime::new();
@@ -65,7 +97,7 @@ async fn main() {
     let mut display_options_menu = false;
 
     loop {
-        let calculation_time = macroquad::miniquad::date::now();
+        let start_time = macroquad::miniquad::date::now();
         clear_background(BLACK);
 
         match game_state {
@@ -75,20 +107,20 @@ async fn main() {
                     Menus::Options.display(
                         &mut game,
                         &mut game_state,
-                        &mut game_settings,
+                        &mut settings,
                         &mut display_options_menu,
                     );
                 } else {
                     Menus::Main.display(
                         &mut game,
                         &mut game_state,
-                        &mut game_settings,
+                        &mut settings,
                         &mut display_options_menu,
                     );
                 }
             }
             GameState::Playing => {
-                if game.settings.draw_labyrinth {
+                if settings.draw_labyrinth {
                     draw_labyrinth(&game);
                 }
                 game.update_position();
@@ -107,7 +139,7 @@ async fn main() {
                 }
             }
             GameState::Paused => {
-                if game.settings.draw_labyrinth {
+                if settings.draw_labyrinth {
                     draw_labyrinth(&game);
                 }
                 draw_player(&game);
@@ -119,7 +151,7 @@ async fn main() {
                 Menus::Pause.display(
                     &mut game,
                     &mut game_state,
-                    &mut game_settings,
+                    &mut settings,
                     &mut display_options_menu,
                 );
             }
@@ -131,7 +163,7 @@ async fn main() {
                     Menus::GameOver.display(
                         &mut game,
                         &mut game_state,
-                        &mut game_settings,
+                        &mut settings,
                         &mut display_options_menu,
                     );
                 }
@@ -142,15 +174,14 @@ async fn main() {
             }
         }
 
-        frame_durations.push(macroquad::miniquad::date::now() - calculation_time);
-        if game.settings.draw_delta_time {
-            // draw_fps();
+        frame_durations.push(macroquad::miniquad::date::now() - start_time);
+        if settings.draw_delta_time {
             let delta_time = frame_durations.delta_time().unwrap_or(0.0) * 1000.0;
             draw_text(
                 format!("dt {:.3}ms", delta_time).as_str(),
                 5.0,
-                FONT_SIZE as f32 / 2.0,
-                FONT_SIZE as f32 / 2.0,
+                FONT_SIZE as f32 * 0.5,
+                FONT_SIZE as f32 * 0.5,
                 TEXT_COLOR,
             );
         };
@@ -160,21 +191,12 @@ async fn main() {
 }
 
 fn draw_player(game: &Game) {
+    let radius = (game.grid_size / CIRCLE_SIZE) as f32;
     game.get_rays()
         .iter()
         .for_each(|ray| draw_line(game.position.x, game.position.y, ray.x, ray.y, 1.0, GREEN));
-    draw_circle(
-        game.target.x,
-        game.target.y,
-        (game.grid_size / CIRCLE_SIZE) as f32,
-        RED,
-    );
-    draw_circle(
-        game.position.x,
-        game.position.y,
-        (game.grid_size / CIRCLE_SIZE) as f32,
-        WHITE,
-    );
+    draw_circle(game.target.x, game.target.y, radius, RED);
+    draw_circle(game.position.x, game.position.y, radius, WHITE);
 }
 
 fn draw_labyrinth(game: &Game) {
@@ -191,13 +213,13 @@ fn draw_labyrinth(game: &Game) {
 }
 
 fn draw_time(game: &Game) {
-    let timer_text = format!("{:.2?}", game.timer.current());
+    let timer_text = format!("{:.2?}s", game.timer.current());
     let text_center = get_text_center(&timer_text, None, FONT_SIZE / 2, 1., 0.);
     draw_text(
         &timer_text,
-        WINDOW_DIMENSIONS.1 as f32 - text_center.x * 2. - 5.,
-        FONT_SIZE as f32 / 2.,
-        FONT_SIZE as f32 / 2.,
+        WINDOW_DIMENSIONS.x - text_center.x * 2. - 5.,
+        FONT_SIZE as f32 * 0.5,
+        FONT_SIZE as f32 * 0.5,
         TEXT_COLOR,
     );
 }

@@ -2,7 +2,8 @@ use macroquad::prelude::*;
 use macroquad::ui::widgets::{Checkbox, ComboBox};
 use macroquad::ui::{Skin, hash, root_ui};
 
-use crate::{Game, GameSettings, GameState, WINDOW_DIMENSIONS};
+use crate::game::Game;
+use crate::{GRID_SIZES, GameState, Settings, WINDOW_DIMENSIONS};
 
 pub enum Menus {
     Main,
@@ -16,7 +17,7 @@ impl Menus {
         self,
         game: &mut Game,
         game_state: &mut GameState,
-        game_settings: &mut GameSettings,
+        settings: &mut Settings,
         display_options_menu: &mut bool,
     ) {
         match self {
@@ -24,16 +25,17 @@ impl Menus {
                 let window_size = vec2(370., 420.);
                 root_ui().window(
                     hash!(),
-                    vec2(
-                        (WINDOW_DIMENSIONS.1 / 2) as f32 - window_size.x / 2.0,
-                        (WINDOW_DIMENSIONS.0 / 2) as f32 - window_size.y / 2.0,
-                    ),
+                    (WINDOW_DIMENSIONS - window_size) * 0.5,
                     window_size,
                     |ui| {
                         ui.label(vec2(80.0, -34.0), "Main Menu");
 
                         if ui.button(vec2(65., 25.), "Play") {
-                            *game = Game::new(game_settings.clone());
+                            *game = Game::new(
+                                GRID_SIZES[settings.labyrinth_size],
+                                settings.dropout,
+                                settings.target_threshold,
+                            );
                             game.timer.start();
                             *game_state = GameState::Playing;
                         }
@@ -52,27 +54,24 @@ impl Menus {
                 let window_size = vec2(420., 375.);
                 root_ui().window(
                     hash!(),
-                    vec2(
-                        (WINDOW_DIMENSIONS.1 / 2) as f32 - window_size.x / 2.0,
-                        (WINDOW_DIMENSIONS.0 / 2) as f32 - window_size.y / 2.0,
-                    ),
+                    (WINDOW_DIMENSIONS - window_size) * 0.5,
                     window_size,
                     |ui| {
                         ui.label(vec2(80.0, -34.0), "Options Menu");
 
                         ComboBox::new(hash!(), &["small", "medium", "large"])
                             .label("Labyrinth Size")
-                            .ui(ui, &mut game_settings.labyrinth_size);
+                            .ui(ui, &mut settings.labyrinth_size);
 
                         Checkbox::new(hash!())
                             .pos(vec2(-110., 25.0))
                             .label("Display Labyrinth")
-                            .ui(ui, &mut game_settings.draw_labyrinth);
+                            .ui(ui, &mut settings.draw_labyrinth);
 
                         Checkbox::new(hash!())
                             .pos(vec2(-110., 50.0))
                             .label("Display dt")
-                            .ui(ui, &mut game_settings.draw_delta_time);
+                            .ui(ui, &mut settings.draw_delta_time);
 
                         if ui.button(vec2(65., 175.), "Back") {
                             *display_options_menu = false;
@@ -84,10 +83,7 @@ impl Menus {
                 let window_size = vec2(400., 420.);
                 root_ui().window(
                     hash!(),
-                    vec2(
-                        (WINDOW_DIMENSIONS.1 / 2) as f32 - window_size.x / 2.,
-                        (WINDOW_DIMENSIONS.0 / 2) as f32 - window_size.y / 2.,
-                    ),
+                    (WINDOW_DIMENSIONS - window_size) * 0.5,
                     window_size,
                     |ui| {
                         ui.label(vec2(80., -34.), "Pause Menu");
@@ -98,7 +94,11 @@ impl Menus {
                         }
 
                         if ui.button(vec2(25., 125.), "New Game") {
-                            *game = Game::new(game_settings.clone());
+                            *game = Game::new(
+                                GRID_SIZES[settings.labyrinth_size],
+                                settings.dropout,
+                                settings.target_threshold,
+                            );
                             game.timer.start();
                             *game_state = GameState::Playing;
                         }
@@ -114,22 +114,23 @@ impl Menus {
                 let window_size = vec2(400., 370.);
                 root_ui().window(
                     hash!(),
-                    vec2(
-                        (WINDOW_DIMENSIONS.1 / 2) as f32 - window_size.x / 2.,
-                        (WINDOW_DIMENSIONS.0 / 2) as f32 - window_size.y / 2.,
-                    ),
+                    (WINDOW_DIMENSIONS - window_size) * 0.5,
                     window_size,
                     |ui| {
                         ui.label(vec2(80., -34.), "Main Menu");
 
                         ui.label(
                             vec2(25., 25.),
-                            format!("You Won! {:.2?}", game.timer.result.unwrap()).as_str(),
+                            format!("You Won! {:.2?}s", game.timer.result.unwrap()).as_str(),
                         );
 
                         if ui.button(vec2(25., 75.), "New Game") {
                             *game_state = GameState::Playing;
-                            *game = Game::new(game_settings.clone());
+                            *game = Game::new(
+                                GRID_SIZES[settings.labyrinth_size],
+                                settings.dropout,
+                                settings.target_threshold,
+                            );
                             game.timer.start();
                         }
 
