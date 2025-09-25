@@ -83,7 +83,7 @@ async fn main() {
     };
     rand::srand(seed);
 
-    let mut settings = Settings::new(false, false, 1, DROPOUT, TARGET_THRESHOLD);
+    let mut settings = Settings::new(false, true, 1, DROPOUT, TARGET_THRESHOLD);
     let mut game = Game::new(
         GRID_SIZES[settings.labyrinth_size],
         settings.dropout,

@@ -16,7 +16,24 @@ impl<T> Point<T> {
     pub fn new(x: T, y: T) -> Self {
         Self { x, y }
     }
-    pub fn from(tuple: (T, T)) -> Self {
+
+    pub fn dot(self, other: Self) -> T
+    where
+        T: Add<Output = T> + Mul<Output = T>,
+    {
+        self.x * other.x + self.y * other.y
+    }
+
+    pub fn cross(self, other: Self) -> T
+    where
+        T: Sub<Output = T> + Mul<Output = T>,
+    {
+        self.x * other.y - self.y * other.x
+    }
+}
+
+impl<T> From<(T, T)> for Point<T> {
+    fn from(tuple: (T, T)) -> Self {
         Self {
             x: tuple.0,
             y: tuple.1,
@@ -58,11 +75,57 @@ impl<T: std::cmp::PartialEq> Line<T> {
             false => Orientation::Vertical,
         }
     }
-    pub fn intersect(&self, other: &Self) -> bool {
+    pub fn shares_endpoint(&self, other: &Self) -> bool {
         (self.a == other.a) | (self.a == other.b) | (self.b == other.a) | (self.b == other.b)
     }
     pub fn extends(&self, other: &Self) -> bool {
-        self.intersect(other) & (self.orientation() == other.orientation())
+        self.shares_endpoint(other) & (self.orientation() == other.orientation())
+    }
+}
+
+impl<T> Line<T>
+where
+    T: num_traits::real::Real + std::cmp::PartialEq,
+{
+    fn ccw(a: &Point<T>, b: &Point<T>, c: &Point<T>) -> bool {
+        (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x)
+    }
+
+    pub fn contains(&self, other: &Self) -> bool {
+        (self.orientation() == other.orientation())
+            & (self.a.x..=self.b.x).contains(&other.a.x)
+            & (self.a.y..=self.b.y).contains(&other.a.y)
+            & (self.a.x..=self.b.x).contains(&other.b.x)
+            & (self.a.y..=self.b.y).contains(&other.b.y)
+    }
+
+    pub fn intersects(&self, other: &Self) -> bool {
+        let p1 = &self.a;
+        let p2 = &self.b;
+        let p3 = &other.a;
+        let p4 = &other.b;
+        (Self::ccw(p1, p3, p4) != Self::ccw(p2, p3, p4))
+            & (Self::ccw(p1, p2, p3) != Self::ccw(p1, p2, p4))
+    }
+
+    pub fn intersection(&self, other: &Self) -> Option<Point<T>> {
+        let p1 = &self.a;
+        let p2 = &self.b;
+        let p3 = &other.a;
+        let p4 = &other.b;
+        let d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+        let t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / d;
+        let u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / d;
+        if (T::from(0.0)..=T::from(1.0)).contains(&Some(t))
+            && (T::from(0.0)..=T::from(1.0)).contains(&Some(u))
+        {
+            Some(Point::new(
+                p1.x + t * (p2.x - p1.x),
+                p1.y + t * (p2.y - p1.y),
+            ))
+        } else {
+            None
+        }
     }
 }
 
@@ -175,9 +238,14 @@ impl<T> Point<T>
 where
     T: num_traits::real::Real,
 {
-    pub fn norm(&self) -> T {
-        (self.x.powi(2) + self.y.powi(2)).sqrt()
+    pub fn snorm(&self) -> T {
+        self.x.powi(2) + self.y.powi(2)
     }
+
+    pub fn norm(&self) -> T {
+        self.snorm().sqrt()
+    }
+
     pub fn distance(&self, other: &Self) -> T {
         (*other - *self).norm()
     }

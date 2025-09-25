@@ -7,7 +7,6 @@ edition = "2024"
 itertools = "0.14.0"
 macroquad = "0.4.14"
 num-traits = "0.2.19"
-rayon = "1.11.0"
 
 [profile.release]
 lto = 'fat'

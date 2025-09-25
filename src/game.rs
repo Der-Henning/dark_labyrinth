@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use macroquad::prelude::*;
-use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 use crate::geometrie::{Line, Point};
@@ -12,18 +11,23 @@ pub struct Game {
     pub timer: GameTimer,
     pub walls: Vec<Line<f32>>,
     pub grid_size: usize,
+    grid: Grid,
     base_rays: Vec<Point<f32>>,
     threshold: f32,
 }
 
 impl Game {
     pub fn new(grid_size: usize, dropout: f32, target_threshold: usize) -> Self {
+        let walls = make_walls(grid_size, dropout);
+        let grid = Grid::new(grid_size).fill(&walls);
+
         Self {
             position: get_random_point(grid_size),
             target: get_random_point(grid_size),
             timer: GameTimer::new(),
-            walls: make_walls(grid_size, dropout),
+            walls,
             grid_size,
+            grid,
             base_rays: get_ray_directions(RAYS, (grid_size * RAY_LENGTH) as f32),
             threshold: (grid_size / target_threshold) as f32,
         }
@@ -32,9 +36,14 @@ impl Game {
     pub fn update_position(&mut self) {
         let mouse_position = Point::from(mouse_position());
         let new_position = self.position + (mouse_position - self.position) * 0.1;
+        let direction = Line::new(self.position, new_position);
+        let cell = self.grid.find(&self.position);
 
-        match get_next_wall_intersection(&self.position, &new_position, &self.walls) {
-            Some((_w, p)) => {
+        match self
+            .grid
+            .find_intersection(&direction, cell, Direction::None)
+        {
+            Some(p) => {
                 let direction = p - self.position;
                 let distance = direction.norm();
                 self.position = self.position + direction * (distance - 1.0) / distance;
@@ -44,12 +53,15 @@ impl Game {
     }
 
     pub fn get_rays(&self) -> Vec<Point<f32>> {
+        let cell = self.grid.find(&self.position);
+
         self.base_rays
-            .par_iter()
+            .iter()
             .map(|&r| {
                 let p2 = self.position + r;
-                match get_next_wall_intersection(&self.position, &p2, &self.walls) {
-                    Some((_wall, p)) => p,
+                let ray = Line::new(self.position, p2);
+                match self.grid.find_intersection(&ray, cell, Direction::None) {
+                    Some(p) => p,
                     _ => p2,
                 }
             })
@@ -62,11 +74,13 @@ impl Game {
 }
 
 fn get_random_point(grid_size: usize) -> Point<f32> {
-    let p = (Vec2::new(rand::rand() as f32, rand::rand() as f32)
-        % (WINDOW_DIMENSIONS / grid_size as f32)
-        + 0.5)
-        * grid_size as f32;
-    Point::new(p.x, p.y)
+    Point::new(
+        rand::rand() as usize % (WINDOW_DIMENSIONS.x as usize / grid_size) * grid_size
+            + grid_size / 2,
+        rand::rand() as usize % (WINDOW_DIMENSIONS.y as usize / grid_size) * grid_size
+            + grid_size / 2,
+    )
+    .into()
 }
 
 fn make_walls(grid_size: usize, dropout: f32) -> Vec<Line<f32>> {
@@ -75,39 +89,6 @@ fn make_walls(grid_size: usize, dropout: f32) -> Vec<Line<f32>> {
         .into_iter()
         .map(|line| Line::<f32>::from(line * grid_size))
         .collect()
-}
-
-pub fn get_next_wall_intersection(
-    p1: &Point<f32>,
-    p2: &Point<f32>,
-    walls: &[Line<f32>],
-) -> Option<(Line<f32>, Point<f32>)> {
-    walls
-        .iter()
-        // filter for walls that have an intersection with the given ray to reduce computation
-        .filter(|wall| {
-            let p3 = wall.a;
-            let p4 = wall.b;
-            let ccw = |a: &Point<f32>, b: &Point<f32>, c: &Point<f32>| {
-                (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x)
-            };
-            (ccw(p1, &p3, &p4) != ccw(p2, &p3, &p4)) & (ccw(p1, p2, &p3) != ccw(p1, p2, &p4))
-        })
-        // calculate the intersection point
-        .map(|wall| {
-            let p3 = wall.a;
-            let p4 = wall.b;
-            let d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
-            let t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / d;
-            let u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / d;
-            (wall, t, u)
-        })
-        .filter(|(_wall, t, u)| (&0.0..=&1.0).contains(&t) & (&0.0..=&1.0).contains(&u))
-        .map(|(wall, t, _u)| (wall, p1.x + t * (p2.x - p1.x), p1.y + t * (p2.y - p1.y)))
-        // take only the nearest intersection point to the player and return intersection as Point
-        .map(|(wall, x, y)| (wall, x, y, (x - p1.x).powi(2) + (y - p1.y).powi(2)))
-        .min_by(|a, b| a.3.partial_cmp(&b.3).unwrap())
-        .map(|(&wall, x, y, _d)| (wall, Point::new(x, y)))
 }
 
 fn make_labyrinth(grid_size: usize, dropout: f32) -> Vec<Line<usize>> {
@@ -215,6 +196,125 @@ fn get_ray_directions(rays: usize, length: f32) -> Vec<Point<f32>> {
         .map(|r| r as f32 / 360.0 * 2.0 * std::f32::consts::PI)
         .map(|r| Point::new(r.sin(), r.cos()) * length)
         .collect()
+}
+
+#[derive(PartialEq, Eq, Hash, Debug)]
+enum Direction {
+    None,
+    North,
+    East,
+    South,
+    West,
+}
+
+const DIRECTIONS: [Direction; 4] = [
+    Direction::North,
+    Direction::East,
+    Direction::South,
+    Direction::West,
+];
+
+impl Direction {
+    fn rev(&self) -> Self {
+        match self {
+            Self::North => Self::South,
+            Self::East => Self::West,
+            Self::South => Self::North,
+            Self::West => Self::East,
+            Self::None => Self::None,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Cell {
+    position: Point<usize>,
+    borders: HashMap<Direction, Line<f32>>,
+    walls: HashMap<Direction, Line<f32>>,
+}
+
+impl Cell {
+    fn new(x: usize, y: usize, grid_size: usize) -> Self {
+        let p1 = Point::new(x * grid_size, y * grid_size).into();
+        let p2 = Point::new((x + 1) * grid_size, y * grid_size).into();
+        let p3 = Point::new((x + 1) * grid_size, (y + 1) * grid_size).into();
+        let p4 = Point::new(x * grid_size, (y + 1) * grid_size).into();
+        Self {
+            position: Point::new(x, y),
+            borders: HashMap::from([
+                (Direction::North, Line::new(p1, p2)),
+                (Direction::East, Line::new(p2, p3)),
+                (Direction::South, Line::new(p3, p4)),
+                (Direction::West, Line::new(p1, p4)),
+            ]),
+            walls: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Grid {
+    cells: HashMap<(usize, usize), Cell>,
+    grid_size: usize,
+}
+
+impl Grid {
+    fn new(grid_size: usize) -> Self {
+        Self {
+            cells: (0..WINDOW_DIMENSIONS.x as usize / grid_size)
+                .cartesian_product(0..WINDOW_DIMENSIONS.y as usize / grid_size)
+                .map(|(x, y)| ((x, y), Cell::new(x, y, grid_size)))
+                .collect(),
+            grid_size,
+        }
+    }
+
+    fn fill(mut self, walls: &[Line<f32>]) -> Self {
+        for (_, c) in self.cells.iter_mut() {
+            for wall in walls {
+                for direction in DIRECTIONS {
+                    if wall.contains(&c.borders[&direction]) {
+                        c.walls.insert(direction, *wall);
+                        break;
+                    }
+                }
+            }
+        }
+        self
+    }
+
+    fn move_to<'a>(&'a self, cell: &'a Cell, direction: &Direction) -> &'a Cell {
+        match direction {
+            Direction::North => &self.cells[&(cell.position.x, cell.position.y - 1)],
+            Direction::East => &self.cells[&(cell.position.x + 1, cell.position.y)],
+            Direction::South => &self.cells[&(cell.position.x, cell.position.y + 1)],
+            Direction::West => &self.cells[&(cell.position.x - 1, cell.position.y)],
+            Direction::None => cell,
+        }
+    }
+
+    fn find(&self, p: &Point<f32>) -> &Cell {
+        &self.cells[&(p.x as usize / self.grid_size, p.y as usize / self.grid_size)]
+    }
+
+    fn find_intersection(
+        &self,
+        line: &Line<f32>,
+        cell: &Cell,
+        direction: Direction,
+    ) -> Option<Point<f32>> {
+        for dir in DIRECTIONS {
+            if dir != direction.rev() && line.intersects(&cell.borders[&dir]) {
+                if let Some(w) = cell.walls.get(&dir) {
+                    return line.intersection(w);
+                } else {
+                    let next_cell = self.move_to(cell, &dir);
+                    return self.find_intersection(line, next_cell, dir);
+                }
+            }
+        }
+        None
+    }
 }
 
 enum GameTimerState {
